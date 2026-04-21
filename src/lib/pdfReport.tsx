@@ -1,0 +1,187 @@
+import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
+import type { FittingInputs, AnalysisResult, DriverProduct } from '../types';
+
+const styles = StyleSheet.create({
+  page:        { padding: 36, fontFamily: 'Helvetica', fontSize: 10, color: '#1F2937' },
+  header:      { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20, paddingBottom: 12, borderBottom: '1 solid #E5E7EB' },
+  title:       { fontSize: 18, fontFamily: 'Helvetica-Bold', color: '#185FA5', marginBottom: 2 },
+  subtitle:    { fontSize: 10, color: '#6B7280' },
+  section:     { marginBottom: 16 },
+  sectionHead: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#185FA5', marginBottom: 6, paddingBottom: 3, borderBottom: '0.5 solid #DBEAFE' },
+  row:         { flexDirection: 'row', marginBottom: 3 },
+  label:       { width: '45%', color: '#6B7280' },
+  value:       { width: '55%', fontFamily: 'Helvetica-Bold' },
+  tableHead:   { flexDirection: 'row', backgroundColor: '#F9FAFB', padding: '5 6', borderBottom: '0.5 solid #E5E7EB' },
+  tableRow:    { flexDirection: 'row', padding: '4 6', borderBottom: '0.5 solid #F3F4F6' },
+  col1:        { width: '30%' },
+  col2:        { width: '25%', textAlign: 'center' },
+  col3:        { width: '25%', textAlign: 'center' },
+  col4:        { width: '20%', textAlign: 'right' },
+  colHead:     { fontFamily: 'Helvetica-Bold', fontSize: 9, color: '#6B7280' },
+  diagBox:     { backgroundColor: '#EFF6FF', padding: 8, borderRadius: 4, marginBottom: 12 },
+  diagText:    { fontSize: 9, color: '#1E40AF', lineHeight: 1.5 },
+  footer:      { position: 'absolute', bottom: 24, left: 36, right: 36, textAlign: 'center', fontSize: 8, color: '#9CA3AF' },
+  badge:       { fontSize: 8, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, marginRight: 3 },
+  recRow:      { flexDirection: 'row', marginBottom: 5, paddingBottom: 5, borderBottom: '0.5 solid #F3F4F6' },
+  recNum:      { width: 18, height: 18, borderRadius: 9, backgroundColor: '#185FA5', color: '#fff', textAlign: 'center', fontSize: 9, fontFamily: 'Helvetica-Bold', paddingTop: 3, marginRight: 6, flexShrink: 0 },
+  recBody:     { flex: 1 },
+  recTitle:    { fontFamily: 'Helvetica-Bold', fontSize: 9, marginBottom: 2 },
+  recDesc:     { fontSize: 8, color: '#374151', lineHeight: 1.4 },
+});
+
+function statusText(s: string) {
+  return s === 'optimal' ? 'Optimal' : s === 'low' ? 'Zu niedrig' : 'Zu hoch';
+}
+
+function ReportDoc({ inputs, result, products }: { inputs: FittingInputs; result: AnalysisResult; products: DriverProduct[] }) {
+  return (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.title}>Driver Fitting Report</Text>
+            <Text style={styles.subtitle}>{inputs.customerName} · Fitter: {inputs.fitterName}</Text>
+          </View>
+          <View style={{ textAlign: 'right' }}>
+            <Text style={{ fontSize: 9, color: '#6B7280' }}>
+              {new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+            </Text>
+            <Text style={{ fontSize: 8, color: '#9CA3AF', marginTop: 2 }}>
+              HCP: {inputs.handicap ?? '—'} · Monitor: {inputs.monitorType}
+            </Text>
+          </View>
+        </View>
+
+        {/* Section 1: Eingaben */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHead}>1 · Messwerte</Text>
+          <View style={{ flexDirection: 'row', gap: 20 }}>
+            <View style={{ flex: 1 }}>
+              {[
+                ['Club Speed', `${inputs.clubSpeedMph} mph`],
+                ['Ball Speed', `${inputs.ballSpeedMph} mph`],
+                ['Launch Angle', `${inputs.launchAngleDeg}°`],
+                ['Angle of Attack', `${inputs.aoaDeg}°`],
+              ].map(([l, v]) => (
+                <View style={styles.row} key={l}>
+                  <Text style={styles.label}>{l}</Text>
+                  <Text style={styles.value}>{v}</Text>
+                </View>
+              ))}
+            </View>
+            <View style={{ flex: 1 }}>
+              {[
+                ['Backspin', `${inputs.backspinRpm} RPM`],
+                ['Spin-Achse', `${inputs.spinAxisDeg > 0 ? '+' : ''}${inputs.spinAxisDeg}°`],
+                ['Trefferzone', inputs.impactZone],
+                ['Aktueller Driver', inputs.currentDriverModel || '—'],
+              ].map(([l, v]) => (
+                <View style={styles.row} key={l}>
+                  <Text style={styles.label}>{l}</Text>
+                  <Text style={styles.value}>{v}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        {/* Section 2: Ist/Soll */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHead}>2 · Ist / Soll Vergleich</Text>
+          <View style={styles.tableHead}>
+            <Text style={[styles.col1, styles.colHead]}>Parameter</Text>
+            <Text style={[styles.col2, styles.colHead]}>Ist-Wert</Text>
+            <Text style={[styles.col3, styles.colHead]}>Zielwert</Text>
+            <Text style={[styles.col4, styles.colHead]}>Status</Text>
+          </View>
+          {[
+            ['Launch Angle', `${inputs.launchAngleDeg}°`, `${result.launchMin}–${result.launchMax}°`, result.launchStatus],
+            ['Backspin', `${inputs.backspinRpm} RPM`, `${result.spinMin}–${result.spinMax} RPM`, result.spinStatus],
+            ['Smash Factor', result.smashFactor.toFixed(3), '≥ 1.48', result.smashFactorStatus],
+            ['Spin Loft', `${result.spinLoftDeg}°`, '—', 'optimal'],
+          ].map(([param, ist, soll, status]) => (
+            <View style={styles.tableRow} key={param}>
+              <Text style={styles.col1}>{param}</Text>
+              <Text style={styles.col2}>{ist}</Text>
+              <Text style={styles.col3}>{soll}</Text>
+              <Text style={[styles.col4, { color: status === 'optimal' ? '#166534' : status === 'low' ? '#92400E' : '#991B1B', fontFamily: 'Helvetica-Bold' }]}>
+                {statusText(status)}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Diagnose */}
+        <View style={styles.diagBox}>
+          <Text style={styles.diagText}>{result.diagnosisText}</Text>
+        </View>
+
+        {/* Section 3: Empfehlungen */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHead}>3 · Empfehlungen</Text>
+          {result.recommendations.slice(0, 6).map((rec, i) => (
+            <View style={styles.recRow} key={i}>
+              <Text style={styles.recNum}>{i + 1}</Text>
+              <View style={styles.recBody}>
+                <Text style={styles.recTitle}>{rec.icon} {rec.title}</Text>
+                <Text style={styles.recDesc}>{rec.description}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* Section 4: CoG */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHead}>4 · CoG & Ausstattungsempfehlung</Text>
+          {[
+            ['CoG vertikal', result.cogVertical],
+            ['CoG horizontal', result.cogHorizontal],
+            ['Empfohlenes Loft', `${result.recommendedLoft}°`],
+            ['Gewichtseinstellung', result.recommendedWeightSetting],
+          ].map(([l, v]) => (
+            <View style={styles.row} key={l}>
+              <Text style={styles.label}>{l}</Text>
+              <Text style={styles.value}>{v}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Section 5: Produkte */}
+        {products.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionHead}>5 · Empfohlene Driver</Text>
+            <View style={styles.tableHead}>
+              <Text style={[styles.col1, styles.colHead]}>Marke</Text>
+              <Text style={[styles.col2, styles.colHead]}>Modell</Text>
+              <Text style={[styles.col3, styles.colHead]}>Loft</Text>
+              <Text style={[styles.col4, styles.colHead]}>Features</Text>
+            </View>
+            {products.map(p => (
+              <View style={styles.tableRow} key={p.id}>
+                <Text style={styles.col1}>{p.brand}</Text>
+                <Text style={styles.col2}>{p.model}</Text>
+                <Text style={styles.col3}>{p.loftOptions.join('/')}</Text>
+                <Text style={styles.col4}>
+                  {[p.lowSpin && 'LS', p.drawBias && 'Draw', p.highMoi && 'MOI'].filter(Boolean).join(' ')}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <Text style={styles.footer}>Erstellt mit Driver Fitting App · PING Optimal Launch & Spin Chart 2022</Text>
+      </Page>
+    </Document>
+  );
+}
+
+export async function generatePDF(inputs: FittingInputs, result: AnalysisResult, products: DriverProduct[]) {
+  const blob = await pdf(<ReportDoc inputs={inputs} result={result} products={products} />).toBlob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `fitting-${inputs.customerName.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
