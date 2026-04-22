@@ -46,37 +46,6 @@ const CARDS = [
   },
 ];
 
-const CARDS = [
-  {
-    icon: Target,
-    title: 'Neues Fitting starten',
-    desc: 'Messwerte eingeben, PING Chart analysieren und Driver-Empfehlung erhalten.',
-    to: '/fitting/new',
-    primary: true,
-  },
-  {
-    icon: History,
-    title: 'Fitting-Historie',
-    desc: 'Alle vergangenen Fitting-Sessions einsehen und vergleichen.',
-    to: '/fitting/history',
-    primary: false,
-  },
-  {
-    icon: TrendingUp,
-    title: 'Strokes Gained Tool',
-    desc: 'Vergleiche zwei Setups anhand des Broadie Strokes Gained Modells.',
-    to: '/tools/strokes-gained',
-    primary: false,
-  },
-  {
-    icon: Settings,
-    title: 'Produktdatenbank',
-    desc: 'Driver-Sortiment pflegen – Modelle, Loft-Optionen und Verfügbarkeit.',
-    to: '/admin',
-    primary: false,
-  },
-];
-
 export default function Home() {
   const navigate = useNavigate();
 
