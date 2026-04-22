@@ -1,8 +1,10 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Download, CheckCircle, AlertCircle, XCircle, ChevronRight } from 'lucide-react';
 import { recommendShaft, getFlexLabel } from '../lib/shaftRecommendation';
+import { buildFlightShapeLabel } from '../lib/dPlaneEngine';
 import MetricCard from '../components/MetricCard';
 import RecommendationCard from '../components/RecommendationCard';
+import TechniqueCard from '../components/TechniqueCard';
 import StrokesGainedTool from '../components/StrokesGainedTool';
 import type { FittingInputs, AnalysisResult, DriverProduct, RankedProduct } from '../types';
 import { useEffect, useRef, useState } from 'react';
@@ -205,24 +207,93 @@ export default function FittingResult() {
             </div>
           </div>
 
-          {/* Block 2: Empfehlungen */}
+          {/* Block 2a: D-Plane Diagnose (nur wenn vorhanden) */}
+          {result.dPlane && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+              <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <span className="text-base">✈️</span> D-Plane Analyse
+              </h2>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <MetricCard
+                  label="Club Path"
+                  value={`${result.dPlane.clubPathDeg}°`}
+                  status={Math.abs(result.dPlane.clubPathDeg) < 3 ? 'optimal' : 'low'}
+                  sublabel={result.dPlane.pathCategory.replace(/-/g, ' ')}
+                />
+                <MetricCard
+                  label="Face Angle"
+                  value={`${result.dPlane.faceAngleDeg}°`}
+                  status={Math.abs(result.dPlane.faceAngleDeg) < 2 ? 'optimal' : 'low'}
+                  sublabel={result.dPlane.faceCategory.replace(/-/g, ' ')}
+                />
+                <MetricCard
+                  label="Face-to-Path"
+                  value={`${result.dPlane.faceToPath > 0 ? '+' : ''}${result.dPlane.faceToPath}°`}
+                  status={Math.abs(result.dPlane.faceToPath) < 3 ? 'optimal' : 'low'}
+                  sublabel={result.dPlane.faceToPath > 3 ? 'Fade/Slice-Tendenz'
+                    : result.dPlane.faceToPath < -3 ? 'Draw/Hook-Tendenz' : 'Neutral'}
+                />
+                <MetricCard
+                  label="Ballflugform"
+                  value={buildFlightShapeLabel(result.dPlane.flightShape).split(' ')[0]}
+                  status="optimal"
+                  sublabel={`Start: ${result.dPlane.startDirection > 0 ? '+' : ''}${result.dPlane.startDirection}°`}
+                />
+              </div>
+              {/* Plausibilitäts-Check */}
+              {Math.abs(result.dPlane.spinAxisDelta) > 5 && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-800">
+                  <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                  <span>
+                    Spin-Achse gemessen ({result.dPlane.spinAxisDeg}°) weicht von D-Plane-Berechnung
+                    ({result.dPlane.spinAxisFromDPlane}°) um {result.dPlane.spinAxisDelta}° ab.
+                    Messwerte prüfen oder Trefferzone korrigieren.
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Block 2b: Equipment-Empfehlungen */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
-            <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <span className="text-base">💡</span> Empfehlungen
+            <h2 className="font-semibold text-gray-800 mb-1 flex items-center gap-2">
+              <span className="text-base">💡</span> Equipment-Empfehlungen
+              <span className="ml-auto text-xs font-normal px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                {result.playerProfile === 'equipment-maxer' ? '🔧 Maximale Anpassung' : '🎯 Überbrückung'}
+              </span>
             </h2>
-            <div className="flex flex-col gap-3">
-              {result.recommendations.length === 0 ? (
+            <div className="flex flex-col gap-3 mt-4">
+              {result.equipmentRecommendations.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
                   <CheckCircle size={32} className="mx-auto mb-2 text-green-400" />
                   <p>Alle Parameter im optimalen Bereich – kein Handlungsbedarf.</p>
                 </div>
               ) : (
-                result.recommendations
+                result.equipmentRecommendations
                   .sort((a, b) => (a.priority === 'primary' ? -1 : 1) - (b.priority === 'primary' ? -1 : 1))
                   .map((rec, i) => <RecommendationCard key={i} rec={rec} index={i} />)
               )}
             </div>
           </div>
+
+          {/* Block 2c: Technik-Empfehlungen (nur tech-optimizer) */}
+          {result.playerProfile === 'tech-optimizer' && result.techniqueRecommendations.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+              <h2 className="font-semibold text-gray-800 mb-1 flex items-center gap-2">
+                <span className="text-base">🎯</span> Technik-Empfehlungen
+                <span className="ml-auto text-xs font-normal px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                  Langfristige Korrektur
+                </span>
+              </h2>
+              <p className="text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2 mt-3 mb-3 leading-relaxed">
+                Diese Empfehlungen setzen voraus, dass der Spieler aktiv an seiner Technik arbeitet.
+                Equipment-Anpassungen überbrücken den Lernprozess.
+              </p>
+              {result.techniqueRecommendations.map((rec, i) => (
+                <TechniqueCard key={i} rec={rec} />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Right column: CoG + Produkte + SG */}

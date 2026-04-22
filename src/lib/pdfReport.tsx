@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
-import type { FittingInputs, AnalysisResult, DriverProduct } from '../types';
+import type { FittingInputs, AnalysisResult, DriverProduct, EquipmentRec } from '../types';
 import { recommendShaft, getFlexLabel } from './shaftRecommendation';
+import { buildFlightShapeLabel } from './dPlaneEngine';
 
 const styles = StyleSheet.create({
   page:        { padding: 36, fontFamily: 'Helvetica', fontSize: 10, color: '#1F2937' },
@@ -21,18 +22,35 @@ const styles = StyleSheet.create({
   colHead:     { fontFamily: 'Helvetica-Bold', fontSize: 9, color: '#6B7280' },
   diagBox:     { backgroundColor: '#EFF6FF', padding: 8, borderRadius: 4, marginBottom: 12 },
   diagText:    { fontSize: 9, color: '#1E40AF', lineHeight: 1.5 },
+  warnBox:     { backgroundColor: '#FFFBEB', padding: 8, borderRadius: 4, marginBottom: 8 },
+  warnText:    { fontSize: 9, color: '#92400E', lineHeight: 1.5 },
+  greenBox:    { backgroundColor: '#F0FDF4', padding: 8, borderRadius: 4, marginBottom: 8 },
+  greenText:   { fontSize: 9, color: '#166534', lineHeight: 1.5 },
   footer:      { position: 'absolute', bottom: 24, left: 36, right: 36, textAlign: 'center', fontSize: 8, color: '#9CA3AF' },
-  badge:       { fontSize: 8, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, marginRight: 3 },
   recRow:      { flexDirection: 'row', marginBottom: 5, paddingBottom: 5, borderBottom: '0.5 solid #F3F4F6' },
   recNum:      { width: 18, height: 18, borderRadius: 9, backgroundColor: '#185FA5', color: '#fff', textAlign: 'center', fontSize: 9, fontFamily: 'Helvetica-Bold', paddingTop: 3, marginRight: 6, flexShrink: 0 },
   recBody:     { flex: 1 },
   recTitle:    { fontFamily: 'Helvetica-Bold', fontSize: 9, marginBottom: 2 },
   recDesc:     { fontSize: 8, color: '#374151', lineHeight: 1.4 },
+  techRow:     { flexDirection: 'row', marginBottom: 6, paddingBottom: 6, borderBottom: '0.5 solid #F3F4F6' },
+  techLabel:   { fontSize: 8, color: '#6B7280', width: '35%' },
+  techCurrent: { fontSize: 8, color: '#991B1B', fontFamily: 'Helvetica-Bold', width: '25%' },
+  techTarget:  { fontSize: 8, color: '#166534', fontFamily: 'Helvetica-Bold', width: '25%' },
+  techDeg:     { fontSize: 8, color: '#374151', width: '15%', textAlign: 'right' },
 });
 
 function statusText(s: string) {
   return s === 'optimal' ? 'Optimal' : s === 'low' ? 'Zu niedrig' : 'Zu hoch';
 }
+
+const CATEGORY_LABEL: Record<EquipmentRec['category'], string> = {
+  cog:          'CoG',
+  loft:         'Loft',
+  weight:       'Gewicht',
+  shaft:        'Schaft',
+  'face-angle': 'Face Angle',
+  moi:          'MOI',
+};
 
 function ReportDoc({ inputs, result, products }: { inputs: FittingInputs; result: AnalysisResult; products: DriverProduct[] }) {
   return (
@@ -87,6 +105,42 @@ function ReportDoc({ inputs, result, products }: { inputs: FittingInputs; result
           </View>
         </View>
 
+        {/* Section 1b: D-Plane Analyse (nur wenn vorhanden) */}
+        {result.dPlane && (
+          <View style={styles.section}>
+            <Text style={styles.sectionHead}>1b · D-Plane Analyse</Text>
+            <View style={styles.tableHead}>
+              <Text style={[styles.col1, styles.colHead]}>Parameter</Text>
+              <Text style={[styles.col2, styles.colHead]}>Wert</Text>
+              <Text style={[styles.col3, styles.colHead]}>Kategorie</Text>
+              <Text style={[styles.col4, styles.colHead]}>Status</Text>
+            </View>
+            {[
+              ['Club Path', `${result.dPlane.clubPathDeg}°`, result.dPlane.pathCategory.replace(/-/g, ' '), Math.abs(result.dPlane.clubPathDeg) < 3 ? 'OK' : 'Abweichung'],
+              ['Face Angle', `${result.dPlane.faceAngleDeg}°`, result.dPlane.faceCategory.replace(/-/g, ' '), Math.abs(result.dPlane.faceAngleDeg) < 2 ? 'OK' : 'Abweichung'],
+              ['Face-to-Path', `${result.dPlane.faceToPath > 0 ? '+' : ''}${result.dPlane.faceToPath}°`,
+                result.dPlane.faceToPath > 3 ? 'Fade/Slice' : result.dPlane.faceToPath < -3 ? 'Draw/Hook' : 'Neutral',
+                Math.abs(result.dPlane.faceToPath) < 3 ? 'OK' : 'Abweichung'],
+              ['Startrichtung', `${result.dPlane.startDirection > 0 ? '+' : ''}${result.dPlane.startDirection}°`, '(Face-dominiert)', ''],
+            ].map(([param, val, cat, status]) => (
+              <View style={styles.tableRow} key={param}>
+                <Text style={styles.col1}>{param}</Text>
+                <Text style={[styles.col2, { fontFamily: 'Helvetica-Bold' }]}>{val}</Text>
+                <Text style={styles.col3}>{cat}</Text>
+                <Text style={[styles.col4, { color: status === 'OK' ? '#166534' : status ? '#92400E' : '#6B7280', fontFamily: status ? 'Helvetica-Bold' : 'Helvetica' }]}>
+                  {status}
+                </Text>
+              </View>
+            ))}
+            <View style={{ ...styles.diagBox, marginTop: 6 }}>
+              <Text style={styles.diagText}>
+                Ballflugform: {buildFlightShapeLabel(result.dPlane.flightShape)}
+                {'\n'}Primäre Ursache: {result.dPlane.primaryCause} · Gear Effect Offset: {result.dPlane.gearEffectOffset > 0 ? '+' : ''}{result.dPlane.gearEffectOffset}°
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Section 2: Ist/Soll */}
         <View style={styles.section}>
           <Text style={styles.sectionHead}>2 · Ist / Soll Vergleich</Text>
@@ -118,14 +172,14 @@ function ReportDoc({ inputs, result, products }: { inputs: FittingInputs; result
           <Text style={styles.diagText}>{result.diagnosisText}</Text>
         </View>
 
-        {/* Section 3: Empfehlungen */}
+        {/* Section 3: Equipment-Empfehlungen */}
         <View style={styles.section}>
-          <Text style={styles.sectionHead}>3 · Empfehlungen</Text>
-          {result.recommendations.slice(0, 6).map((rec, i) => (
+          <Text style={styles.sectionHead}>3 · Equipment-Empfehlungen</Text>
+          {result.equipmentRecommendations.slice(0, 6).map((rec, i) => (
             <View style={styles.recRow} key={i}>
               <Text style={styles.recNum}>{i + 1}</Text>
               <View style={styles.recBody}>
-                <Text style={styles.recTitle}>{rec.icon} {rec.title}</Text>
+                <Text style={styles.recTitle}>[{CATEGORY_LABEL[rec.category]}] {rec.title}</Text>
                 <Text style={styles.recDesc}>{rec.description}</Text>
               </View>
             </View>
@@ -147,6 +201,41 @@ function ReportDoc({ inputs, result, products }: { inputs: FittingInputs; result
             </View>
           ))}
         </View>
+
+        {/* Section 4b: Spielerprofil */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHead}>4b · Spielerprofil</Text>
+          <View style={result.playerProfile === 'tech-optimizer' ? styles.greenBox : styles.diagBox}>
+            <Text style={result.playerProfile === 'tech-optimizer' ? styles.greenText : styles.diagText}>
+              {result.playerProfile === 'tech-optimizer'
+                ? 'Technik-Optimierer: Der Spieler arbeitet aktiv an seiner Technik. Equipment überbrückt kurzfristig — Technik-Empfehlungen haben Priorität über reine Equipment-Kompensation.'
+                : 'Equipment-Maximierer: Der Spieler spielt so wie er spielt. Schläger wird maximal auf den aktuellen Schwung zugeschnitten — volle Kompensation durch Equipment.'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Section 4c: Technik-Empfehlungen (nur tech-optimizer) */}
+        {result.playerProfile === 'tech-optimizer' && result.techniqueRecommendations.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionHead}>4c · Technik-Empfehlungen (langfristige Korrektur)</Text>
+            <View style={styles.tableHead}>
+              <Text style={[{ width: '35%' }, styles.colHead]}>Empfehlung</Text>
+              <Text style={[{ width: '25%' }, styles.colHead]}>Aktuell</Text>
+              <Text style={[{ width: '25%' }, styles.colHead]}>Ziel</Text>
+              <Text style={[{ width: '15%', textAlign: 'right' }, styles.colHead]}>Korrektur</Text>
+            </View>
+            {result.techniqueRecommendations.map((rec, i) => (
+              <View style={styles.techRow} key={i}>
+                <Text style={styles.techLabel}>{rec.title}</Text>
+                <Text style={styles.techCurrent}>{rec.currentValue}</Text>
+                <Text style={styles.techTarget}>{rec.targetValue}</Text>
+                <Text style={styles.techDeg}>
+                  {rec.improvementDeg > 0 ? `${rec.improvementDeg.toFixed(1)}°` : '—'}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* Section 5: Produkte */}
         {products.length > 0 && (

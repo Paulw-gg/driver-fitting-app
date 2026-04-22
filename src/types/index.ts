@@ -4,6 +4,7 @@ export type MonitorType = 'radar' | 'camera';
 export type LaunchStatus = 'optimal' | 'low' | 'high';
 export type CustomerGoal = 'distance' | 'direction' | 'shotshaping' | 'trajectory';
 export type SwingTempo = 'slow' | 'medium' | 'fast';
+export type PlayerProfile = 'tech-optimizer' | 'equipment-maxer';
 
 export interface FittingInputs {
   customerName: string;
@@ -24,6 +25,51 @@ export interface FittingInputs {
   impactZone: ImpactZone;
   customerGoals: CustomerGoal[];
   tempo: SwingTempo;
+  clubPathDeg: number | null;
+  faceAngleDeg: number | null;
+  playerProfile: PlayerProfile;
+}
+
+export interface DPlaneAnalysis {
+  // Eingaben
+  clubPathDeg: number;
+  faceAngleDeg: number;
+  spinAxisDeg: number;
+  impactZone: ImpactZone;
+
+  // Berechnungen
+  faceToPath: number;
+  startDirection: number;
+  gearEffectOffset: number;
+  spinAxisFromDPlane: number;
+  spinAxisDelta: number;
+
+  // Diagnose
+  pathCategory: 'stark-out-to-in' | 'leicht-out-to-in' | 'neutral' | 'leicht-in-to-out' | 'stark-in-to-out';
+  faceCategory: 'stark-offen' | 'leicht-offen' | 'square' | 'leicht-geschlossen' | 'stark-geschlossen';
+  primaryCause: 'face' | 'path' | 'geareffect' | 'kombiniert';
+  flightShape: 'pull-hook' | 'hook' | 'draw' | 'straight' | 'fade' | 'slice' | 'push-slice' | 'push';
+
+  // Verbesserungspotenzial
+  pathCorrectionNeeded: number;
+  faceCorrectionNeeded: number;
+}
+
+export interface EquipmentRec {
+  priority: 'primary' | 'secondary';
+  category: 'cog' | 'loft' | 'weight' | 'shaft' | 'face-angle' | 'moi';
+  title: string;
+  description: string;
+  profileRelevance: 'both' | 'tech-optimizer' | 'equipment-maxer';
+}
+
+export interface TechniqueRec {
+  priority: 'primary' | 'secondary';
+  title: string;
+  description: string;
+  targetValue: string;
+  currentValue: string;
+  improvementDeg: number;
 }
 
 export interface AnalysisResult {
@@ -42,11 +88,15 @@ export interface AnalysisResult {
   spinStatus: LaunchStatus;
   smashFactorStatus: LaunchStatus;
   diagnosisText: string;
-  recommendations: Recommendation[];
+  recommendations: EquipmentRec[];
+  equipmentRecommendations: EquipmentRec[];
+  techniqueRecommendations: TechniqueRec[];
   cogVertical: 'low-back' | 'low-forward' | 'very-low';
   cogHorizontal: 'neutral' | 'heel-bias' | 'toe-bias';
   recommendedLoft: number;
   recommendedWeightSetting: WeightSetting;
+  dPlane: DPlaneAnalysis | null;
+  playerProfile: PlayerProfile;
 }
 
 export interface Recommendation {
@@ -74,6 +124,6 @@ export interface DriverProduct {
 }
 
 export interface RankedProduct extends DriverProduct {
-  rank: number;    // 1 = best match
-  score: number;   // raw score for debugging / display
+  rank: number;
+  score: number;
 }

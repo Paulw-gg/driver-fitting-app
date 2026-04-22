@@ -4,7 +4,10 @@ import { ChevronRight, Zap } from 'lucide-react';
 import FaceZonePicker from '../components/FaceZonePicker';
 import SpinAxisSlider from '../components/SpinAxisSlider';
 import { runAnalysis } from '../lib/analysisEngine';
-import type { FittingInputs, ImpactZone, WeightSetting, MonitorType, CustomerGoal, SwingTempo } from '../types';
+import type {
+  FittingInputs, ImpactZone, WeightSetting, MonitorType,
+  CustomerGoal, SwingTempo, PlayerProfile,
+} from '../types';
 
 const GOAL_OPTIONS: { id: CustomerGoal; label: string }[] = [
   { id: 'distance',    label: 'Mehr Länge' },
@@ -48,6 +51,9 @@ const defaultInputs: FittingInputs = {
   impactZone: 'sweetspot',
   customerGoals: [],
   tempo: 'medium',
+  clubPathDeg: null,
+  faceAngleDeg: null,
+  playerProfile: 'equipment-maxer',
 };
 
 interface SectionProps { title: string; children: React.ReactNode; }
@@ -62,11 +68,18 @@ function Section({ title, children }: SectionProps) {
   );
 }
 
-interface FieldProps { label: string; children: React.ReactNode; hint?: string; }
-function Field({ label, children, hint }: FieldProps) {
+interface FieldProps { label: string; children: React.ReactNode; hint?: string; optional?: boolean; }
+function Field({ label, children, hint, optional }: FieldProps) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+        {label}
+        {optional && (
+          <span className="text-xs font-normal text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+            optional
+          </span>
+        )}
+      </label>
       {children}
       {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
     </div>
@@ -107,11 +120,21 @@ export default function NewFitting() {
 
   const smashColor = liveSF >= 1.48 ? '#1D9E75' : liveSF >= 1.44 ? '#BA7517' : '#E24B4A';
 
+  // Live Face-to-Path Berechnung
+  const liveFtp = inputs.clubPathDeg !== null && inputs.faceAngleDeg !== null
+    ? Math.round((inputs.faceAngleDeg - inputs.clubPathDeg) * 10) / 10
+    : null;
+  const ftpLabel = liveFtp === null ? null
+    : liveFtp > 3  ? '→ Fade/Slice-Tendenz'
+    : liveFtp < -3 ? '→ Draw/Hook-Tendenz'
+    : '→ Neutral';
+  const ftpWarn = liveFtp !== null && Math.abs(liveFtp) > 5;
+
   return (
     <div className="max-w-2xl lg:max-w-5xl mx-auto px-4 lg:px-6 py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Neues Fitting</h1>
-        <p className="text-gray-500 text-sm mt-1">Alle Felder ausfüllen, dann Analyse starten.</p>
+        <p className="text-gray-500 text-sm mt-1">Alle Pflichtfelder ausfüllen, dann Analyse starten.</p>
       </div>
 
       {/* Desktop: 2-column grid. Mobile/tablet: single column. */}
@@ -150,8 +173,7 @@ export default function NewFitting() {
                 <div className="flex gap-1.5">
                   {TEMPO_OPTIONS.map(opt => (
                     <button
-                      key={opt.id}
-                      type="button"
+                      key={opt.id} type="button"
                       onClick={() => set('tempo', opt.id)}
                       title={opt.desc}
                       className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${
@@ -185,7 +207,7 @@ export default function NewFitting() {
           </Section>
         </div>
 
-        {/* Right column: Messwerte + Ziele + Button */}
+        {/* Right column: Messwerte + D-Plane + Ziele + Spielerprofil + Button */}
         <div>
           <Section title="2 · Messwerte (Durchschnitte)">
             <div className="mb-4">
@@ -222,7 +244,8 @@ export default function NewFitting() {
                   onChange={e => set('ballSpeedMph', parseFloat(e.target.value) || 0)} />
               </Field>
               <Field label="Smash Factor (live)">
-                <div className="border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold bg-gray-50" style={{ color: smashColor }}>
+                <div className="border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold bg-gray-50"
+                  style={{ color: smashColor }}>
                   {liveSF > 0 ? liveSF.toFixed(3) : '—'}
                 </div>
               </Field>
@@ -245,6 +268,56 @@ export default function NewFitting() {
                 <SpinAxisSlider value={inputs.spinAxisDeg} onChange={v => set('spinAxisDeg', v)} />
               </Field>
             </div>
+
+            {/* Club Path + Face Angle (optional) */}
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <p className="text-xs text-gray-400 mb-3 font-medium uppercase tracking-wide">
+                D-Plane — optional, aktiviert erweiterte Analyse
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Club Path (°)" optional hint="In-to-Out = positiv · Out-to-In = negativ">
+                  <input
+                    className={inputCls}
+                    type="number"
+                    step="0.5"
+                    min="-20"
+                    max="20"
+                    placeholder="z.B. −4"
+                    value={inputs.clubPathDeg ?? ''}
+                    onChange={e => set('clubPathDeg', e.target.value === '' ? null : parseFloat(e.target.value))}
+                  />
+                </Field>
+                <Field label="Face Angle (°)" optional hint="Open = positiv · Closed = negativ">
+                  <input
+                    className={inputCls}
+                    type="number"
+                    step="0.5"
+                    min="-15"
+                    max="15"
+                    placeholder="z.B. +3"
+                    value={inputs.faceAngleDeg ?? ''}
+                    onChange={e => set('faceAngleDeg', e.target.value === '' ? null : parseFloat(e.target.value))}
+                  />
+                </Field>
+              </div>
+
+              {/* Live Face-to-Path Anzeige */}
+              {liveFtp !== null && (
+                <div className={`mt-3 flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm ${
+                  ftpWarn
+                    ? 'bg-amber-50 border border-amber-200'
+                    : 'bg-gray-50 border border-gray-200'
+                }`}>
+                  <span className="text-gray-500 text-xs font-medium">Face-to-Path</span>
+                  <span className={`font-bold text-base ${ftpWarn ? 'text-amber-600' : 'text-[#185FA5]'}`}>
+                    {liveFtp > 0 ? '+' : ''}{liveFtp}°
+                  </span>
+                  <span className={`text-xs ml-auto ${ftpWarn ? 'text-amber-600' : 'text-gray-500'}`}>
+                    {ftpLabel}
+                  </span>
+                </div>
+              )}
+            </div>
           </Section>
 
           <Section title="4 · Kundenziele">
@@ -262,6 +335,59 @@ export default function NewFitting() {
                   {g.label}
                 </button>
               ))}
+            </div>
+          </Section>
+
+          {/* Section 5: Spielerprofil */}
+          <Section title="5 · Spielerprofil — Wie soll die Empfehlung ausgerichtet sein?">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(
+                [
+                  {
+                    id: 'tech-optimizer' as PlayerProfile,
+                    icon: '🎯',
+                    title: 'Technik-Optimierer',
+                    desc: 'Der Spieler arbeitet aktiv an seiner Technik. Equipment überbrückt kurzfristig — Empfehlungen berücksichtigen, was sich durch Technik verbessern wird.',
+                    tags: ['Technik-Tipps', 'Korrekturbedarf in Grad', 'Übergangs-Equipment'],
+                  },
+                  {
+                    id: 'equipment-maxer' as PlayerProfile,
+                    icon: '🔧',
+                    title: 'Equipment-Maximierer',
+                    desc: 'Der Spieler spielt so wie er spielt — kein aktives Training geplant. Schläger wird maximal auf den aktuellen Schwung zugeschnitten.',
+                    tags: ['Maximale Kompensation', 'Draw-Bias / Fade-Bias', 'Hohes MOI'],
+                  },
+                ] as const
+              ).map(opt => {
+                const active = inputs.playerProfile === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => set('playerProfile', opt.id)}
+                    className={`w-full text-left rounded-xl border p-4 transition-all ${
+                      active
+                        ? 'border-[#185FA5] bg-blue-50 ring-1 ring-[#185FA5]'
+                        : 'border-gray-200 bg-white hover:border-gray-400'
+                    }`}
+                  >
+                    <div className="text-2xl mb-2">{opt.icon}</div>
+                    <div className={`font-semibold text-sm mb-1.5 ${active ? 'text-[#185FA5]' : 'text-gray-900'}`}>
+                      {opt.title}
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed mb-2">{opt.desc}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {opt.tags.map(tag => (
+                        <span key={tag} className={`text-xs px-2 py-0.5 rounded-full ${
+                          active ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </Section>
 
