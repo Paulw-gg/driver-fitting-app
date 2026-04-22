@@ -3,6 +3,7 @@ export type WeightSetting = 'heel' | 'neutral' | 'toe' | 'draw' | 'fade' | 'fron
 export type MonitorType = 'radar' | 'camera';
 export type LaunchStatus = 'optimal' | 'low' | 'high';
 export type CustomerGoal = 'distance' | 'direction' | 'shotshaping' | 'trajectory';
+export type SwingTempo = 'slow' | 'medium' | 'fast';
 
 export interface FittingInputs {
   customerName: string;
@@ -22,6 +23,7 @@ export interface FittingInputs {
   monitorType: MonitorType;
   impactZone: ImpactZone;
   customerGoals: CustomerGoal[];
+  tempo: SwingTempo;
 }
 
 export interface AnalysisResult {
@@ -69,4 +71,9 @@ export interface DriverProduct {
   moiRating: string;
   availableInShop: boolean;
   notes?: string;
+}
+
+export interface RankedProduct extends DriverProduct {
+  rank: number;    // 1 = best match
+  score: number;   // raw score for debugging / display
 }

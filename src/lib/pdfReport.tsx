@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
 import type { FittingInputs, AnalysisResult, DriverProduct } from '../types';
+import { recommendShaft, getFlexLabel } from './shaftRecommendation';
 
 const styles = StyleSheet.create({
   page:        { padding: 36, fontFamily: 'Helvetica', fontSize: 10, color: '#1F2937' },
@@ -169,6 +170,45 @@ function ReportDoc({ inputs, result, products }: { inputs: FittingInputs; result
             ))}
           </View>
         )}
+
+        {/* Section 6: Schaftempfehlung */}
+        {(() => {
+          const shaft = recommendShaft(inputs.clubSpeedMph, inputs.tempo ?? 'medium');
+          const shortExplanation = shaft.explanation.split('. ').slice(0, 2).join('. ') + '.';
+          return (
+            <View style={styles.section}>
+              <Text style={styles.sectionHead}>6 · Schaftempfehlung</Text>
+              {[
+                ['Empfohlener Flex', getFlexLabel(shaft.recommendedFlex)],
+                ['Gewichtsbereich', shaft.weightRange],
+                ['Launch-Profil', shaft.launchProfile],
+              ].map(([l, v]) => (
+                <View style={styles.row} key={l}>
+                  <Text style={styles.label}>{l}</Text>
+                  <Text style={styles.value}>{v}</Text>
+                </View>
+              ))}
+              {shaft.primaryShafts.length > 0 && (
+                <>
+                  <Text style={{ fontSize: 9, color: '#6B7280', marginTop: 4, marginBottom: 3 }}>
+                    Empfohlene Schäfte
+                  </Text>
+                  {shaft.primaryShafts.map(s => (
+                    <View style={styles.tableRow} key={s.id}>
+                      <Text style={styles.col1}>{s.brand} {s.name}</Text>
+                      <Text style={styles.col2}>{s.weightG}g</Text>
+                      <Text style={styles.col3}>{s.flexOptions.join(' / ')}</Text>
+                      <Text style={styles.col4}>{s.launchProfile}</Text>
+                    </View>
+                  ))}
+                </>
+              )}
+              <View style={{ ...styles.diagBox, marginTop: 6 }}>
+                <Text style={styles.diagText}>{shortExplanation}</Text>
+              </View>
+            </View>
+          );
+        })()}
 
         <Text style={styles.footer}>Erstellt mit Driver Fitting App · PING Optimal Launch & Spin Chart 2022</Text>
       </Page>

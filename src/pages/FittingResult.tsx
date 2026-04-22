@@ -1,12 +1,14 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Download, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, Download, CheckCircle, AlertCircle, XCircle, ChevronRight } from 'lucide-react';
+import { recommendShaft, getFlexLabel } from '../lib/shaftRecommendation';
 import MetricCard from '../components/MetricCard';
 import RecommendationCard from '../components/RecommendationCard';
 import StrokesGainedTool from '../components/StrokesGainedTool';
-import type { FittingInputs, AnalysisResult, DriverProduct } from '../types';
-import { useEffect, useState } from 'react';
+import type { FittingInputs, AnalysisResult, DriverProduct, RankedProduct } from '../types';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { recommendProducts, FALLBACK_PRODUCTS } from '../lib/recommendProducts';
+import { saveFittingSession } from '../lib/sessionStorage';
 import { generatePDF } from '../lib/pdfReport';
 
 const COG_V_LABELS: Record<string, string> = {
@@ -15,15 +17,15 @@ const COG_V_LABELS: Record<string, string> = {
   'very-low':    'Very Low (max. Launch, tiefes CoG)',
 };
 const COG_H_LABELS: Record<string, string> = {
-  neutral:    'Neutral',
+  neutral:     'Neutral',
   'heel-bias': 'Heel-Bias (Draw-Effekt)',
   'toe-bias':  'Toe-Bias (Fade-Effekt)',
 };
 
 const BADGE_STYLES: Record<string, string> = {
-  'Low-Spin':  'bg-blue-100 text-blue-700',
-  'Draw-Bias': 'bg-purple-100 text-purple-700',
-  'High-MOI':  'bg-green-100 text-green-700',
+  'Low-Spin':    'bg-blue-100 text-blue-700',
+  'Draw-Bias':   'bg-purple-100 text-purple-700',
+  'High-MOI':    'bg-green-100 text-green-700',
   'Verstellbar': 'bg-amber-100 text-amber-700',
 };
 
@@ -33,7 +35,7 @@ function StatusIcon({ status }: { status: string }) {
   return <XCircle size={16} className="text-red-500" />;
 }
 
-function ProductCard({ p }: { p: DriverProduct }) {
+function ProductCard({ p }: { p: RankedProduct }) {
   const badges = [
     p.lowSpin && 'Low-Spin',
     p.drawBias && 'Draw-Bias',
@@ -42,8 +44,11 @@ function ProductCard({ p }: { p: DriverProduct }) {
   ].filter(Boolean) as string[];
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <div className="font-bold text-gray-900">{p.brand}</div>
+    <div className="rounded-xl border border-gray-200 bg-white p-4 relative">
+      <span className="absolute top-3 right-3 w-6 h-6 rounded-full bg-[#185FA5] text-white text-xs font-bold flex items-center justify-center">
+        {p.rank}
+      </span>
+      <div className="font-bold text-gray-900 pr-8">{p.brand}</div>
       <div className="text-gray-600 text-sm mb-2">{p.model}</div>
       <div className="text-xs text-gray-400 mb-3">Loft: {p.loftOptions.join(' / ')}°</div>
       <div className="flex flex-wrap gap-1">
@@ -63,6 +68,7 @@ export default function FittingResult() {
   const navigate = useNavigate();
   const state = location.state as { inputs: FittingInputs; result: AnalysisResult } | null;
   const [products, setProducts] = useState<DriverProduct[]>([]);
+  const savedRef = useRef(false);
 
   useEffect(() => {
     async function loadProducts() {
@@ -85,20 +91,38 @@ export default function FittingResult() {
     loadProducts();
   }, []);
 
+  // Save session + recommendations once products are resolved
+  useEffect(() => {
+    if (!state || savedRef.current || products.length === 0) return;
+    savedRef.current = true;
+    const ranked = recommendProducts(state.result, state.inputs.customerGoals, products);
+    saveFittingSession(state.inputs, state.result, ranked);
+  }, [state, products]);
+
   if (!state) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-12 text-center">
-        <p className="text-gray-500">Kein Fitting gefunden. <button onClick={() => navigate('/fitting/new')} className="text-blue-600 underline">Neues Fitting starten.</button></p>
+        <p className="text-gray-500">
+          Kein Fitting gefunden.{' '}
+          <button onClick={() => navigate('/fitting/new')} className="text-blue-600 underline">
+            Neues Fitting starten.
+          </button>
+        </p>
       </div>
     );
   }
 
   const { inputs, result } = state;
-  const recommended = recommendProducts(result, inputs.customerGoals, products.length > 0 ? products : FALLBACK_PRODUCTS);
+  const pool = products.length > 0 ? products : FALLBACK_PRODUCTS;
+  const recommended = recommendProducts(result, inputs.customerGoals, pool);
   const showSG = inputs.customerGoals.includes('distance') || inputs.customerGoals.includes('direction');
 
+  const hcp = inputs.handicap;
+  const hcpLevel = hcp !== null && hcp <= 5 ? 5 : hcp !== null && hcp <= 10 ? 10 : hcp !== null && hcp <= 18 ? 15 : 25;
+
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
+    <div className="max-w-2xl lg:max-w-5xl mx-auto px-4 lg:px-6 py-8">
+      {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
           <ArrowLeft size={20} className="text-gray-600" />
@@ -116,154 +140,206 @@ export default function FittingResult() {
         </button>
       </div>
 
-      {/* Block 1: Ist-Analyse */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
-        <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-          <span className="text-base">📊</span> Ist-Analyse
-        </h2>
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <MetricCard
-            label="Smash Factor"
-            value={result.smashFactor.toFixed(3)}
-            status={result.smashFactorStatus}
-            target="≥ 1.48"
-            sublabel={`Club: ${inputs.clubSpeedMph} mph · Ball: ${inputs.ballSpeedMph} mph`}
-          />
-          <MetricCard
-            label="Spin Loft"
-            value={`${result.spinLoftDeg}°`}
-            status="optimal"
-            sublabel={`Dyn. Loft: ${result.dynLoftDeg}°`}
-          />
-          <MetricCard
-            label="Launch"
-            value={`${inputs.launchAngleDeg}°`}
-            unit=""
-            status={result.launchStatus}
-            target={`${result.optimalLaunchDeg}°`}
-            delta={`${result.launchDeltaDeg > 0 ? '+' : ''}${result.launchDeltaDeg}°`}
-          />
-          <MetricCard
-            label="Backspin"
-            value={inputs.backspinRpm.toLocaleString('de')}
-            unit="RPM"
-            status={result.spinStatus}
-            target={`${result.optimalSpinRpm.toLocaleString('de')} RPM`}
-            delta={`${result.spinDeltaRpm > 0 ? '+' : ''}${result.spinDeltaRpm.toLocaleString('de')}`}
-          />
-        </div>
+      {/* Desktop: 2-column. Mobile/tablet: stacked. */}
+      <div className="lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start">
 
-        {/* Ziel-Bereiche */}
-        <div className="grid grid-cols-2 gap-3 mb-4 text-xs text-gray-500">
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="font-medium text-gray-700 mb-1">Launch-Zielbereich</div>
-            <div className="text-gray-900 font-semibold">{result.launchMin}° – {result.launchMax}°</div>
-            <div className="flex items-center gap-1 mt-1">
-              <StatusIcon status={result.launchStatus} />
-              <span>{result.launchStatus === 'optimal' ? 'Im Zielbereich' : result.launchStatus === 'low' ? 'Zu niedrig' : 'Zu hoch'}</span>
+        {/* Left column: Analyse + Empfehlungen */}
+        <div>
+          {/* Block 1: Ist-Analyse */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+            <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <span className="text-base">📊</span> Ist-Analyse
+            </h2>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <MetricCard
+                label="Smash Factor"
+                value={result.smashFactor.toFixed(3)}
+                status={result.smashFactorStatus}
+                target="≥ 1.48"
+                sublabel={`Club: ${inputs.clubSpeedMph} mph · Ball: ${inputs.ballSpeedMph} mph`}
+              />
+              <MetricCard
+                label="Spin Loft"
+                value={`${result.spinLoftDeg}°`}
+                status="optimal"
+                sublabel={`Dyn. Loft: ${result.dynLoftDeg}°`}
+              />
+              <MetricCard
+                label="Launch"
+                value={`${inputs.launchAngleDeg}°`}
+                status={result.launchStatus}
+                target={`${result.optimalLaunchDeg}°`}
+                delta={`${result.launchDeltaDeg > 0 ? '+' : ''}${result.launchDeltaDeg}°`}
+              />
+              <MetricCard
+                label="Backspin"
+                value={inputs.backspinRpm.toLocaleString('de')}
+                unit="RPM"
+                status={result.spinStatus}
+                target={`${result.optimalSpinRpm.toLocaleString('de')} RPM`}
+                delta={`${result.spinDeltaRpm > 0 ? '+' : ''}${result.spinDeltaRpm.toLocaleString('de')}`}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-4 text-xs text-gray-500">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="font-medium text-gray-700 mb-1">Launch-Zielbereich</div>
+                <div className="text-gray-900 font-semibold">{result.launchMin}° – {result.launchMax}°</div>
+                <div className="flex items-center gap-1 mt-1">
+                  <StatusIcon status={result.launchStatus} />
+                  <span>{result.launchStatus === 'optimal' ? 'Im Zielbereich' : result.launchStatus === 'low' ? 'Zu niedrig' : 'Zu hoch'}</span>
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="font-medium text-gray-700 mb-1">Spin-Zielbereich</div>
+                <div className="text-gray-900 font-semibold">{result.spinMin.toLocaleString('de')} – {result.spinMax.toLocaleString('de')} RPM</div>
+                <div className="flex items-center gap-1 mt-1">
+                  <StatusIcon status={result.spinStatus} />
+                  <span>{result.spinStatus === 'optimal' ? 'Im Zielbereich' : result.spinStatus === 'low' ? 'Zu niedrig' : 'Zu hoch'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-800 leading-relaxed">
+              {result.diagnosisText}
             </div>
           </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="font-medium text-gray-700 mb-1">Spin-Zielbereich</div>
-            <div className="text-gray-900 font-semibold">{result.spinMin.toLocaleString('de')} – {result.spinMax.toLocaleString('de')} RPM</div>
-            <div className="flex items-center gap-1 mt-1">
-              <StatusIcon status={result.spinStatus} />
-              <span>{result.spinStatus === 'optimal' ? 'Im Zielbereich' : result.spinStatus === 'low' ? 'Zu niedrig' : 'Zu hoch'}</span>
+
+          {/* Block 2: Empfehlungen */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+            <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <span className="text-base">💡</span> Empfehlungen
+            </h2>
+            <div className="flex flex-col gap-3">
+              {result.recommendations.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  <CheckCircle size={32} className="mx-auto mb-2 text-green-400" />
+                  <p>Alle Parameter im optimalen Bereich – kein Handlungsbedarf.</p>
+                </div>
+              ) : (
+                result.recommendations
+                  .sort((a, b) => (a.priority === 'primary' ? -1 : 1) - (b.priority === 'primary' ? -1 : 1))
+                  .map((rec, i) => <RecommendationCard key={i} rec={rec} index={i} />)
+              )}
             </div>
           </div>
         </div>
 
-        <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-800 leading-relaxed">
-          {result.diagnosisText}
-        </div>
-      </div>
+        {/* Right column: CoG + Produkte + SG */}
+        <div>
+          {/* Block 3: CoG & Equipment */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+            <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <span className="text-base">⚙️</span> CoG & Ausstattungsempfehlung
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="text-xs text-gray-500 font-medium mb-1 uppercase tracking-wide">CoG vertikal</div>
+                <div className="font-bold text-gray-900 text-sm">{COG_V_LABELS[result.cogVertical]}</div>
+                <div className="mt-3 flex flex-col items-center">
+                  <svg width="80" height="80" viewBox="0 0 80 80">
+                    <rect x="10" y="10" width="60" height="60" rx="10" fill="#E5E7EB" stroke="#D1D5DB" strokeWidth="1.5" />
+                    {result.cogVertical === 'low-back'    && <circle cx="25" cy="55" r="8" fill="#185FA5" />}
+                    {result.cogVertical === 'low-forward' && <circle cx="55" cy="55" r="8" fill="#185FA5" />}
+                    {result.cogVertical === 'very-low'    && <circle cx="40" cy="65" r="7" fill="#185FA5" />}
+                    <text x="40" y="40" textAnchor="middle" fontSize="8" fill="#9CA3AF">CoG</text>
+                  </svg>
+                  <p className="text-xs text-gray-400 text-center mt-1">{result.cogVertical}</p>
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="text-xs text-gray-500 font-medium mb-1 uppercase tracking-wide">CoG horizontal</div>
+                <div className="font-bold text-gray-900 text-sm">{COG_H_LABELS[result.cogHorizontal]}</div>
+                <div className="mt-3 flex flex-col gap-2">
+                  <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
+                    <span className="text-sm text-gray-600">Empf. Loft</span>
+                    <span className="font-bold text-gray-900">{result.recommendedLoft}°</span>
+                  </div>
+                  <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
+                    <span className="text-sm text-gray-600">Gewichtseinst.</span>
+                    <span className="font-bold text-gray-900 capitalize">{result.recommendedWeightSetting}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-      {/* Block 2: Empfehlungen */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
-        <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-          <span className="text-base">💡</span> Empfehlungen
-        </h2>
-        <div className="flex flex-col gap-3">
-          {result.recommendations.length === 0 && (
-            <div className="text-center py-8 text-gray-400">
-              <CheckCircle size={32} className="mx-auto mb-2 text-green-400" />
-              <p>Alle Parameter im optimalen Bereich – kein Handlungsbedarf.</p>
+          {/* Block 3b: Schaftempfehlung kompakt */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+            <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <span className="text-base">🏹</span> Schaftempfehlung
+            </h2>
+            {(() => {
+              const shaft = recommendShaft(inputs.clubSpeedMph, inputs.tempo ?? 'medium');
+              return (
+                <>
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    {[
+                      { label: 'Flex', value: shaft.recommendedFlex },
+                      { label: 'Gewicht', value: shaft.weightRange },
+                      { label: 'Launch', value: shaft.launchProfile },
+                    ].map(m => (
+                      <div key={m.label} className="bg-gray-50 rounded-lg p-2 text-center">
+                        <div className="text-xs text-gray-400">{m.label}</div>
+                        <div className="font-bold text-[#185FA5] text-sm">{m.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-xs text-gray-600 mb-3">
+                    <strong>{getFlexLabel(shaft.recommendedFlex)}</strong>
+                    {shaft.primaryShafts.length > 0 && (
+                      <span className="text-gray-400">
+                        {' · '}
+                        {shaft.primaryShafts.map(s => `${s.brand} ${s.name}`).join(', ')}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => navigate(`/shaft-fitting?speed=${inputs.clubSpeedMph}&tempo=${inputs.tempo ?? 'medium'}`)}
+                    className="flex items-center gap-1 text-xs text-[#185FA5] font-medium
+                      hover:underline transition-colors"
+                  >
+                    Vollständige Schaftanalyse öffnen
+                    <ChevronRight size={13} />
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+
+          {/* Block 4: Produkte */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+            <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <span className="text-base">🏌️</span> Passende Driver aus dem Sortiment
+            </h2>
+            {recommended.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">
+                Keine passenden Produkte im Sortiment. Produktdatenbank prüfen.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {recommended.map(p => <ProductCard key={p.id} p={p} />)}
+              </div>
+            )}
+          </div>
+
+          {/* Block 5: Strokes Gained (optional) */}
+          {showSG && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+              <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <span className="text-base">📈</span> Strokes Gained Vergleich
+              </h2>
+              <p className="text-xs text-gray-500 mb-4">
+                Vergleiche dein aktuelles Setup mit einer optimierten Variante. Distanz in Metern (ca. 1 mph ≈ 2,0 m Carry).
+              </p>
+              <StrokesGainedTool
+                initialA={{ carryDistanceM: Math.round(inputs.ballSpeedMph * 2.0) }}
+                initialHcp={hcpLevel as 5 | 10 | 15 | 25}
+              />
             </div>
           )}
-          {result.recommendations
-            .sort((a, b) => (a.priority === 'primary' ? -1 : 1) - (b.priority === 'primary' ? -1 : 1))
-            .map((rec, i) => <RecommendationCard key={i} rec={rec} index={i} />)
-          }
         </div>
       </div>
-
-      {/* Block 3: CoG & Equipment */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
-        <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-          <span className="text-base">⚙️</span> CoG & Ausstattungsempfehlung
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-gray-50 rounded-xl p-4">
-            <div className="text-xs text-gray-500 font-medium mb-1 uppercase tracking-wide">CoG vertikal</div>
-            <div className="font-bold text-gray-900 text-sm">{COG_V_LABELS[result.cogVertical]}</div>
-            {/* Visual */}
-            <div className="mt-3 flex flex-col items-center">
-              <svg width="80" height="80" viewBox="0 0 80 80">
-                <rect x="10" y="10" width="60" height="60" rx="10" fill="#E5E7EB" stroke="#D1D5DB" strokeWidth="1.5" />
-                {result.cogVertical === 'low-back' && <circle cx="25" cy="55" r="8" fill="#185FA5" />}
-                {result.cogVertical === 'low-forward' && <circle cx="55" cy="55" r="8" fill="#185FA5" />}
-                {result.cogVertical === 'very-low' && <circle cx="40" cy="65" r="7" fill="#185FA5" />}
-                <text x="40" y="40" textAnchor="middle" fontSize="8" fill="#9CA3AF">CoG</text>
-              </svg>
-              <p className="text-xs text-gray-400 text-center mt-1">{result.cogVertical}</p>
-            </div>
-          </div>
-          <div className="bg-gray-50 rounded-xl p-4">
-            <div className="text-xs text-gray-500 font-medium mb-1 uppercase tracking-wide">CoG horizontal</div>
-            <div className="font-bold text-gray-900 text-sm">{COG_H_LABELS[result.cogHorizontal]}</div>
-            <div className="mt-3 flex flex-col gap-2">
-              <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
-                <span className="text-sm text-gray-600">Empf. Loft</span>
-                <span className="font-bold text-gray-900">{result.recommendedLoft}°</span>
-              </div>
-              <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
-                <span className="text-sm text-gray-600">Gewichtseinst.</span>
-                <span className="font-bold text-gray-900 capitalize">{result.recommendedWeightSetting}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Block 4: Produkte */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
-        <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-          <span className="text-base">🏌️</span> Passende Driver aus dem Sortiment
-        </h2>
-        {recommended.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-4">Keine passenden Produkte im Sortiment. Produktdatenbank prüfen.</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {recommended.map(p => <ProductCard key={p.id} p={p} />)}
-          </div>
-        )}
-      </div>
-
-      {/* Block 5: Strokes Gained (optional) */}
-      {showSG && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
-          <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <span className="text-base">📈</span> Strokes Gained Vergleich
-          </h2>
-          <p className="text-xs text-gray-500 mb-4">
-            Vergleiche dein aktuelles Setup mit einer optimierten Variante. Distanz in Metern (ca. 1 mph ≈ 2,0 m Carry).
-          </p>
-          <StrokesGainedTool
-            initialA={{ carryDistanceM: Math.round(inputs.ballSpeedMph * 2.0) }}
-            initialHcp={inputs.handicap !== null && inputs.handicap <= 5 ? 5 : inputs.handicap !== null && inputs.handicap <= 10 ? 10 : inputs.handicap !== null && inputs.handicap <= 18 ? 15 : 25}
-          />
-        </div>
-      )}
     </div>
   );
 }
