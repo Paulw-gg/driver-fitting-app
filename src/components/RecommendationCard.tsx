@@ -1,12 +1,23 @@
-import type { Recommendation } from '../types';
+import type { EquipmentRec } from '../types';
+
+const CATEGORY_ICON: Record<EquipmentRec['category'], string> = {
+  cog: '⚙️',
+  loft: '📐',
+  weight: '🏋️',
+  shaft: '🪵',
+  'face-angle': '🎯',
+  moi: '🔩',
+};
 
 interface Props {
-  rec: Recommendation;
+  rec: EquipmentRec;
   index: number;
 }
 
 export default function RecommendationCard({ rec, index }: Props) {
   const isPrimary = rec.priority === 'primary';
+  const icon = CATEGORY_ICON[rec.category];
+
   return (
     <div
       className={`rounded-xl p-4 border flex gap-3 ${
@@ -24,7 +35,7 @@ export default function RecommendationCard({ rec, index }: Props) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-lg leading-none">{rec.icon}</span>
+          <span className="text-lg leading-none">{icon}</span>
           <span className={`font-semibold text-sm ${isPrimary ? 'text-blue-900' : 'text-gray-800'}`}>
             {rec.title}
           </span>
