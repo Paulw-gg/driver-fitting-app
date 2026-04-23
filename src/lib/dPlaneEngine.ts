@@ -12,10 +12,27 @@ import type { DPlaneAnalysis, ImpactZone } from '../types';
 // Gear Effect Offsets pro Trefferzone (empirische Werte, Grad Spin-Achse)
 const GEAR_EFFECT_OFFSET: Record<ImpactZone, number> = {
   'sweetspot':  0,
-  'hoch-mitte': 0,    // Vertikaler Gear Effect — keine horizontale Spin-Achsen-Wirkung
-  'tief':       0,    // Vertikaler Gear Effect — keine horizontale Spin-Achsen-Wirkung
-  'heel':      +10,   // Heel-Treffer: Spin-Achse kippt nach rechts (Fade/Slice-Richtung)
-  'toe':       -10,   // Toe-Treffer: Spin-Achse kippt nach links (Draw/Hook-Richtung)
+  'hoch-mitte': 0,
+  'tief':       0,
+  'heel':      +10,
+  'toe':       -10,
+  'tief-heel': +8,
+  'tief-toe':  -8,
+  'hoch-heel': +8,
+  'hoch-toe':  -8,
+};
+
+// Vertical Gear Effect — modifier auf gemessene Spin-Achse (rpm)
+export const VERTICAL_SPIN_MODIFIER: Record<ImpactZone, number> = {
+  'sweetspot':   0,
+  'hoch-mitte': -400,
+  'tief':       +500,
+  'heel':         0,
+  'toe':          0,
+  'hoch-heel':  -200,
+  'hoch-toe':   -200,
+  'tief-heel':  +300,
+  'tief-toe':   +300,
 };
 
 // Kategorisierung Club Path

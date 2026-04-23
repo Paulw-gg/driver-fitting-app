@@ -2,7 +2,7 @@ import { analyse } from './pingChartLookup';
 import { analyseDPlane, buildFlightShapeLabel } from './dPlaneEngine';
 import type {
   FittingInputs, AnalysisResult, EquipmentRec,
-  TechniqueRec, DPlaneAnalysis, PlayerProfile,
+  TechniqueRec, DPlaneAnalysis, PlayerProfile, ImpactZone,
 } from '../types';
 
 export function runAnalysis(inputs: FittingInputs): AnalysisResult {
@@ -483,6 +483,16 @@ function buildDiagnosisText(
     parts.push(`Smash Factor ${smashFactor.toFixed(3)} — Off-Center-Treffer kostet Ballgeschwindigkeit.`);
   }
 
+  const zoneDescriptions: Partial<Record<ImpactZone, string>> = {
+    'tief-heel': 'Tief-Heel-Treffer: Kombination aus erhöhtem Spin (Tief) und Rechtsspin durch Gear Effect (Heel). Doppelter Nachteil.',
+    'tief-toe':  'Tief-Toe-Treffer: Erhöhter Spin (Tief) mit Linksspin durch Gear Effect (Toe).',
+    'hoch-heel': 'Hoch-Heel-Treffer: Positiver Vertical Gear Effect (weniger Spin) wird durch Heel-Gear-Effect (Rechtsspin) überlagert.',
+    'hoch-toe':  'Hoch-Toe-Treffer: Weniger Spin durch vertikalen Effekt, aber Linksspin durch Toe-Gear-Effect.',
+  };
+  if (zoneDescriptions[inputs.impactZone]) {
+    parts.push(zoneDescriptions[inputs.impactZone]!);
+  }
+
   if (profile === 'tech-optimizer') {
     parts.push('Spielerprofil: Technik-Optimierer — Equipment überbrückt kurzfristig, Technik-Empfehlungen haben Priorität.');
   } else {
@@ -490,4 +500,46 @@ function buildDiagnosisText(
   }
 
   return parts.join(' ');
+}
+
+// ─── Schaftlängen-Empfehlung (Teil 5) ─────────────────────────────────────────
+
+export interface ShaftLengthRecommendation {
+  currentLengthIn: number;
+  recommendedAdjustment: number;
+  reason: string;
+  priority: 'info' | 'warn' | 'strong';
+}
+
+export function getShaftLengthRecommendation(
+  impactZone: ImpactZone,
+  smashFactor: number,
+  clubSpeedMph: number
+): ShaftLengthRecommendation {
+  const standardLength = 45.5;
+
+  if (['tief', 'heel', 'tief-heel', 'tief-toe'].includes(impactZone) || smashFactor < 1.42) {
+    return {
+      currentLengthIn: standardLength,
+      recommendedAdjustment: -0.5,
+      reason: `Inkonstantes Trefferbild (${impactZone}-Zone, Smash Factor ${smashFactor.toFixed(3)}): Ein um 0.5" kürzerer Schaft (${(standardLength - 0.5).toFixed(1)}") verbessert die Kontrolle und damit das Trefferbild nachweislich.`,
+      priority: smashFactor < 1.40 ? 'strong' : 'warn',
+    };
+  }
+
+  if (['toe', 'hoch-toe'].includes(impactZone) && clubSpeedMph > 100) {
+    return {
+      currentLengthIn: standardLength,
+      recommendedAdjustment: 0,
+      reason: 'Toe-Treffer bei hoher Geschwindigkeit: Schaftlänge Standard ist akzeptabel. Bei anhaltendem Toe-Muster: 0.5" kürzer testen.',
+      priority: 'info',
+    };
+  }
+
+  return {
+    currentLengthIn: standardLength,
+    recommendedAdjustment: 0,
+    reason: 'Schaftlänge Standard (45.5") ist für dieses Trefferbild optimal.',
+    priority: 'info',
+  };
 }

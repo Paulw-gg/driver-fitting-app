@@ -1,4 +1,13 @@
-export type ImpactZone = 'sweetspot' | 'hoch-mitte' | 'tief' | 'heel' | 'toe';
+export type ImpactZone =
+  | 'sweetspot'
+  | 'hoch-mitte'
+  | 'tief'
+  | 'heel'
+  | 'toe'
+  | 'tief-heel'
+  | 'tief-toe'
+  | 'hoch-heel'
+  | 'hoch-toe';
 export type WeightSetting = 'heel' | 'neutral' | 'toe' | 'draw' | 'fade' | 'front' | 'back';
 export type MonitorType = 'radar' | 'camera';
 export type LaunchStatus = 'optimal' | 'low' | 'high';
@@ -126,4 +135,31 @@ export interface DriverProduct {
 export interface RankedProduct extends DriverProduct {
   rank: number;
   score: number;
+}
+
+// Schaft aus Supabase (snake_case — direkt vom API)
+export interface ShaftProductRow {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  brand: string;
+  name: string;
+  weight_g: number;
+  flex_options: string[];
+  torque_deg: number | null;
+  kick_point: string | null;
+  launch_profile: string;
+  spin_profile: string;
+  tempo_match: string[];
+  speed_range_min: number;
+  speed_range_max: number;
+  tags: string[];
+  description: string | null;
+  is_primary: boolean;
+  available: boolean;
+  cpm_s: number | null;
+  cpm_r: number | null;
+  cpm_x: number | null;
+  cpm_a: number | null;
+  cpm_l: number | null;
 }

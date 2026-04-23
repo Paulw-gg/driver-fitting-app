@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, User, Calendar, Search, ChevronRight,
-  CheckCircle, AlertCircle, XCircle,
+  CheckCircle, AlertCircle, XCircle, Trash2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
+import { deleteFittingSession } from '../lib/database';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -259,6 +260,19 @@ export default function FittingHistory() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Session | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(e: React.MouseEvent, id: string) {
+    e.stopPropagation();
+    if (!window.confirm('Diese Session wirklich löschen?')) return;
+    setDeletingId(id);
+    try {
+      await deleteFittingSession(id);
+      setSessions(prev => prev.filter(s => s.id !== id));
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -348,12 +362,15 @@ export default function FittingHistory() {
       ) : (
         <div className="flex flex-col gap-3">
           {filtered.map(s => (
-            <button
+            <div
               key={s.id}
-              onClick={() => setSelected(s)}
-              className="w-full text-left bg-white rounded-xl border border-gray-200
-                hover:border-gray-300 hover:shadow-sm transition-all p-4"
+              className="relative bg-white rounded-xl border border-gray-200
+                hover:border-gray-300 hover:shadow-sm transition-all"
             >
+              <button
+                onClick={() => setSelected(s)}
+                className="w-full text-left p-4"
+              >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <User size={15} className="text-gray-400 flex-shrink-0" />
@@ -394,7 +411,17 @@ export default function FittingHistory() {
                   <div className="text-gray-400">Spin</div>
                 </div>
               </div>
-            </button>
+              </button>
+              <button
+                onClick={(e) => handleDelete(e, s.id)}
+                disabled={deletingId === s.id}
+                className="absolute top-3 right-3 p-1.5 rounded-lg text-gray-300
+                  hover:text-red-500 hover:bg-red-50 transition-colors"
+                title="Session löschen"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
           ))}
         </div>
       )}

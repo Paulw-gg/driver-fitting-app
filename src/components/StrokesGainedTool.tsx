@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { computeSG, type HcpLevel } from '../lib/strokesGained';
+import { FairwayVisualization } from './FairwayVisualization';
 
 const HCP_OPTIONS: { value: HcpLevel; label: string }[] = [
   { value: 0,  label: 'Tour Pro' },
@@ -124,6 +125,23 @@ export default function StrokesGainedTool({ initialA, initialHcp }: Props) {
               ? 'Beide Setups sind gleichwertig.'
               : `Setup A ist ${Math.abs(delta).toFixed(3)} SG besser als Setup B.`
           }
+        </p>
+      </div>
+
+      {/* Fairway visualization */}
+      <div style={{ marginTop: '16px' }}>
+        <div className="text-sm font-medium mb-2" style={{ color: '#1E4D2B' }}>
+          Fairway-Visualisierung
+        </div>
+        <div className="rounded-xl overflow-hidden border border-[#C5D5C9]">
+          <FairwayVisualization
+            setupA={{ carryM: a.carryDistanceM, deviationM: a.deviationM, label: 'A', color: '#185FA5' }}
+            setupB={{ carryM: b.carryDistanceM, deviationM: b.deviationM, label: 'B', color: '#1E4D2B' }}
+            holeLengthM={Math.max(a.holeLengthM, b.holeLengthM)}
+          />
+        </div>
+        <p className="text-xs text-gray-400 mt-1.5 text-center">
+          Gestrichelte Kreise zeigen die durchschnittliche Streuung (±1σ). Fairway-Breite: 28m.
         </p>
       </div>
     </div>

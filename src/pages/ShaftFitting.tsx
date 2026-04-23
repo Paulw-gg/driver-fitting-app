@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, AlertTriangle, Info } from 'lucide-react';
 import {
@@ -6,9 +6,12 @@ import {
   mphToKmh,
   kmhToMph,
   getFlexLabel,
+  rowToShaftOption,
+  SHAFT_DATABASE_FALLBACK,
   type Tempo,
   type ShaftOption,
 } from '../lib/shaftRecommendation';
+import { fetchShafts } from '../lib/database';
 
 // ── Tag colour coding ────────────────────────────────────────────────────────
 
@@ -69,6 +72,18 @@ function ShaftCard({ shaft, primary }: { shaft: ShaftOption; primary: boolean })
 
       <p className="text-xs text-gray-500 leading-relaxed">{shaft.description}</p>
 
+      {(() => {
+        const cpmParts = (
+          [['L', shaft.cpmL], ['A', shaft.cpmA], ['R', shaft.cpmR], ['S', shaft.cpmS], ['X', shaft.cpmX]] as
+          [string, number | null | undefined][]
+        ).filter(([, v]) => v != null).map(([f, v]) => `${f} ${v}`);
+        return cpmParts.length > 0 ? (
+          <div className="mt-2 text-xs text-gray-400">
+            CPM: <strong className="text-gray-600">{cpmParts.join(' · ')}</strong>
+          </div>
+        ) : null;
+      })()}
+
       <div className="mt-2 flex gap-3 text-xs text-gray-400">
         <span>Kick-Point: <strong className="text-gray-600">{shaft.kickPoint}</strong></span>
         <span>Torque: <strong className="text-gray-600">{shaft.torqueDeg}°</strong></span>
@@ -111,6 +126,15 @@ export default function ShaftFitting() {
   const [speedMph, setSpeedMph] = useState(initSpeed);
   const [unit, setUnit] = useState<'mph' | 'kmh'>('mph');
   const [tempo, setTempo] = useState<Tempo>(initTempo);
+  const [shaftOptions, setShaftOptions] = useState<ShaftOption[]>([]);
+  const [loadingShafts, setLoadingShafts] = useState(true);
+
+  useEffect(() => {
+    fetchShafts()
+      .then(rows => setShaftOptions(rows.map(rowToShaftOption)))
+      .catch(() => setShaftOptions(SHAFT_DATABASE_FALLBACK))
+      .finally(() => setLoadingShafts(false));
+  }, []);
 
   // The value shown / entered in the current unit
   const displaySpeed = unit === 'mph' ? speedMph : mphToKmh(speedMph);
@@ -126,12 +150,20 @@ export default function ShaftFitting() {
     setUnit(newUnit);
   }
 
-  const result = recommendShaft(speedMph, tempo);
+  const result = recommendShaft(speedMph, tempo, undefined, shaftOptions);
 
   const launchLabels: Record<string, string> = {
     'hoch': 'Hoch', 'mittel-hoch': 'Mittel-Hoch', 'mittel': 'Mittel',
     'niedrig-mittel': 'Niedrig-Mittel', 'niedrig': 'Niedrig',
   };
+
+  if (loadingShafts) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="text-gray-400 text-sm">Schäfte werden geladen…</div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl lg:max-w-4xl mx-auto px-4 lg:px-6 py-8">

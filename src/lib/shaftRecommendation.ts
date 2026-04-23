@@ -26,6 +26,11 @@ export interface ShaftOption {
   tags: string[];
   description: string;
   isPrimary: boolean;
+  cpmL?: number | null;
+  cpmA?: number | null;
+  cpmR?: number | null;
+  cpmS?: number | null;
+  cpmX?: number | null;
 }
 
 export interface ShaftRecommendationResult {
@@ -362,14 +367,44 @@ export const SHAFT_DATABASE: ShaftOption[] = [
   },
 ];
 
+// Fallback-Export für Offline-Betrieb
+export { SHAFT_DATABASE as SHAFT_DATABASE_FALLBACK };
+
+// ─── rowToShaftOption ─────────────────────────────────────────────────────────
+
+import type { ShaftProductRow } from '../types';
+
+export function rowToShaftOption(row: ShaftProductRow): ShaftOption {
+  return {
+    id:            row.id,
+    brand:         row.brand,
+    name:          row.name,
+    weightG:       row.weight_g,
+    flexOptions:   row.flex_options as FlexCode[],
+    torqueDeg:     row.torque_deg ?? 3.5,
+    kickPoint:     (row.kick_point ?? 'mittel') as ShaftOption['kickPoint'],
+    launchProfile: row.launch_profile as LaunchProfile,
+    spinProfile:   row.spin_profile as SpinProfile,
+    tempoMatch:    row.tempo_match as Tempo[],
+    speedRangeMph: [row.speed_range_min, row.speed_range_max],
+    tags:          row.tags,
+    description:   row.description ?? '',
+    isPrimary:     row.is_primary,
+    cpmL:          row.cpm_l,
+    cpmA:          row.cpm_a,
+    cpmR:          row.cpm_r,
+    cpmS:          row.cpm_s,
+    cpmX:          row.cpm_x,
+  };
+}
+
 // ─── Alle Marken ──────────────────────────────────────────────────────────────
 
-/**
- * Gibt alle einzigartigen Marken aus der Schaftdatenbank zurück,
- * alphabetisch sortiert.
- */
-export function getAllBrands(): string[] {
-  return [...new Set(SHAFT_DATABASE.map(s => s.brand))].sort();
+export function getAllBrands(externalShafts?: ShaftOption[]): string[] {
+  const source = externalShafts && externalShafts.length > 0
+    ? externalShafts
+    : SHAFT_DATABASE;
+  return [...new Set(source.map(s => s.brand))].sort();
 }
 
 // ─── Flex-Logik ────────────────────────────────────────────────────────────────
@@ -433,12 +468,13 @@ function matchShafts(
   speedMph: number,
   tempo: Tempo,
   flex: FlexCode,
-  allowedBrands?: string[]
+  allowedBrands?: string[],
+  database: ShaftOption[] = SHAFT_DATABASE
 ): { primary: ShaftOption[]; alternatives: ShaftOption[] } {
   const fi = FLEX_ORDER.indexOf(flex);
   const SPEED_TOLERANCE = 12;
 
-  const scored = SHAFT_DATABASE
+  const scored = database
     .filter(s => {
       const speedOk =
         speedMph >= s.speedRangeMph[0] - SPEED_TOLERANCE &&
@@ -558,17 +594,22 @@ export function getFlexLabel(flex: FlexCode): string {
  * @param clubSpeedMph  Driver Clubspeed in mph (vom Launch Monitor)
  * @param tempo         Schwungtempo: 'slow' | 'medium' | 'fast'
  * @param allowedBrands Wenn angegeben, nur Schäfte dieser Marken zeigen ([] = alle)
+ * @param externalShafts Aus Supabase geladene Schäfte (überschreibt SHAFT_DATABASE)
  */
 export function recommendShaft(
   clubSpeedMph: number,
   tempo: Tempo,
-  allowedBrands?: string[]
+  allowedBrands?: string[],
+  externalShafts?: ShaftOption[]
 ): ShaftRecommendationResult {
+  const database      = externalShafts && externalShafts.length > 0
+    ? externalShafts
+    : SHAFT_DATABASE;
   const baseFlex      = getBaseFlexFromSpeed(clubSpeedMph);
   const { correctedFlex, applied, direction } = applyTempoCorrection(baseFlex, tempo);
   const weightRange   = getWeightRange(clubSpeedMph, tempo);
   const launchProfile = getLaunchProfile(clubSpeedMph, tempo);
-  const { primary, alternatives } = matchShafts(clubSpeedMph, tempo, correctedFlex, allowedBrands);
+  const { primary, alternatives } = matchShafts(clubSpeedMph, tempo, correctedFlex, allowedBrands, database);
   const explanation   = buildExplanation(clubSpeedMph, tempo, correctedFlex, applied, direction);
   const warnings      = buildWarnings(clubSpeedMph, tempo, correctedFlex);
 
@@ -583,7 +624,7 @@ export function recommendShaft(
     warnings,
     tempoAdjustmentApplied:    applied,
     tempoAdjustmentDirection:  direction,
-    availableBrands:           getAllBrands(),
+    availableBrands:           getAllBrands(database),
   };
 }
 

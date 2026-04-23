@@ -282,14 +282,20 @@ function ReportDoc({ inputs, result, products }: { inputs: FittingInputs; result
                   <Text style={{ fontSize: 9, color: '#6B7280', marginTop: 4, marginBottom: 3 }}>
                     Empfohlene Schäfte
                   </Text>
-                  {shaft.primaryShafts.map(s => (
-                    <View style={styles.tableRow} key={s.id}>
-                      <Text style={styles.col1}>{s.brand} {s.name}</Text>
-                      <Text style={styles.col2}>{s.weightG}g</Text>
-                      <Text style={styles.col3}>{s.flexOptions.join(' / ')}</Text>
-                      <Text style={styles.col4}>{s.launchProfile}</Text>
-                    </View>
-                  ))}
+                  {shaft.primaryShafts.map(s => {
+                    const cpmStr = (
+                      [['L', s.cpmL], ['A', s.cpmA], ['R', s.cpmR], ['S', s.cpmS], ['X', s.cpmX]] as
+                      [string, number | null | undefined][]
+                    ).filter(([, v]) => v != null).map(([f, v]) => `${f}:${v}`).join(' ');
+                    return (
+                      <View style={styles.tableRow} key={s.id}>
+                        <Text style={styles.col1}>{s.brand} {s.name}</Text>
+                        <Text style={styles.col2}>{s.weightG}g</Text>
+                        <Text style={styles.col3}>{s.flexOptions.join(' / ')}</Text>
+                        <Text style={styles.col4}>{cpmStr || s.launchProfile}</Text>
+                      </View>
+                    );
+                  })}
                 </>
               )}
               <View style={{ ...styles.diagBox, marginTop: 6 }}>

@@ -5,86 +5,149 @@ interface Props {
   onZoneSelect: (zone: ImpactZone) => void;
 }
 
-const ZONES: { id: ImpactZone; label: string; color: string; hoverColor: string; x: number; y: number; w: number; h: number }[] = [
-  { id: 'hoch-mitte', label: 'Hoch-Mitte', color: '#DBEAFE', hoverColor: '#93C5FD', x: 90,  y: 30,  w: 120, h: 55 },
-  { id: 'sweetspot',  label: 'Sweetspot',  color: '#DCFCE7', hoverColor: '#86EFAC', x: 90,  y: 90,  w: 120, h: 60 },
-  { id: 'tief',       label: 'Tief',       color: '#FEF3C7', hoverColor: '#FCD34D', x: 90,  y: 155, w: 120, h: 50 },
-  { id: 'heel',       label: 'Heel',       color: '#FCE7F3', hoverColor: '#F9A8D4', x: 20,  y: 70,  w: 65,  h: 110 },
-  { id: 'toe',        label: 'Toe',        color: '#EDE9FE', hoverColor: '#C4B5FD', x: 215, y: 70,  w: 65,  h: 110 },
+interface ZoneConfig {
+  id: ImpactZone;
+  row: number;
+  col: number;
+  label: string;
+  color: string;
+  desc: string;
+}
+
+const ZONES: ZoneConfig[] = [
+  { id: 'hoch-heel',  row: 0, col: 0, label: 'Hoch Heel',  color: '#9B6B8A', desc: 'Hoch + Heel' },
+  { id: 'hoch-mitte', row: 0, col: 1, label: 'Hoch Mitte', color: '#185FA5', desc: 'Über CoG, zentral' },
+  { id: 'hoch-toe',   row: 0, col: 2, label: 'Hoch Toe',   color: '#6B5E9B', desc: 'Hoch + Toe' },
+  { id: 'heel',       row: 1, col: 0, label: 'Heel',        color: '#993556', desc: 'Hosel-Seite' },
+  { id: 'sweetspot',  row: 1, col: 1, label: 'Sweetspot',   color: '#1D9E75', desc: 'Optimale Mitte' },
+  { id: 'toe',        row: 1, col: 2, label: 'Toe',         color: '#534AB7', desc: 'Schlägerspitze' },
+  { id: 'tief-heel',  row: 2, col: 0, label: 'Tief Heel',   color: '#B05A3A', desc: 'Tief + Heel' },
+  { id: 'tief',       row: 2, col: 1, label: 'Tief',        color: '#BA7517', desc: 'Unter CoG' },
+  { id: 'tief-toe',   row: 2, col: 2, label: 'Tief Toe',    color: '#7B4FB0', desc: 'Tief + Toe' },
 ];
 
-const ZONE_COLORS: Record<ImpactZone, string> = {
-  'hoch-mitte': '#3B82F6',
-  sweetspot:    '#22C55E',
-  tief:         '#F59E0B',
-  heel:         '#EC4899',
-  toe:          '#8B5CF6',
-};
+const ZONE_MAP = Object.fromEntries(ZONES.map(z => [z.id, z])) as Record<ImpactZone, ZoneConfig>;
+
+// SVG grid constants
+const PAD = 16;
+const CELL_W = 80;
+const CELL_H = 58;
+const GAP = 4;
+const SVG_W = PAD * 2 + CELL_W * 3 + GAP * 2;
+const SVG_H = PAD * 2 + CELL_H * 3 + GAP * 2;
+
+function cellX(col: number) { return PAD + col * (CELL_W + GAP); }
+function cellY(row: number) { return PAD + row * (CELL_H + GAP); }
 
 export default function FaceZonePicker({ value, onZoneSelect }: Props) {
-  return (
-    <div className="flex flex-col sm:flex-row gap-6 items-start">
-      <div className="flex-shrink-0">
-        <svg width="300" height="220" viewBox="0 0 300 220" className="border border-gray-200 rounded-xl bg-white">
-          {/* Driver face outline */}
-          <rect x="15" y="15" width="270" height="190" rx="18" ry="18"
-            fill="#F9FAFB" stroke="#D1D5DB" strokeWidth="2" />
+  const selected = ZONE_MAP[value];
 
-          {/* Zones */}
-          {ZONES.map(zone => (
+  return (
+    <div>
+      {/* SVG grid */}
+      <svg
+        width={SVG_W}
+        height={SVG_H}
+        viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+        className="rounded-xl border border-gray-200 bg-white block"
+        style={{ maxWidth: '100%' }}
+      >
+        {/* Driver face outline */}
+        <rect
+          x={PAD - 6} y={PAD - 6}
+          width={CELL_W * 3 + GAP * 2 + 12}
+          height={CELL_H * 3 + GAP * 2 + 12}
+          rx={12} ry={12}
+          fill="#F9FAFB" stroke="#D1D5DB" strokeWidth={1.5}
+        />
+
+        {ZONES.map(zone => {
+          const x = cellX(zone.col);
+          const y = cellY(zone.row);
+          const isSelected = value === zone.id;
+          return (
             <g key={zone.id} onClick={() => onZoneSelect(zone.id)} style={{ cursor: 'pointer' }}>
               <rect
-                x={zone.x} y={zone.y} width={zone.w} height={zone.h}
-                rx="6" ry="6"
-                fill={value === zone.id ? ZONE_COLORS[zone.id] : zone.color}
-                stroke={value === zone.id ? ZONE_COLORS[zone.id] : '#E5E7EB'}
-                strokeWidth={value === zone.id ? 2 : 1}
-                opacity={0.85}
+                x={x} y={y} width={CELL_W} height={CELL_H}
+                rx={6} ry={6}
+                fill={isSelected ? zone.color : `${zone.color}22`}
+                stroke={isSelected ? zone.color : '#E5E7EB'}
+                strokeWidth={isSelected ? 2.5 : 1}
               />
               <text
-                x={zone.x + zone.w / 2} y={zone.y + zone.h / 2 + 4}
-                textAnchor="middle" fontSize="11" fontWeight={value === zone.id ? '700' : '500'}
-                fill={value === zone.id ? '#fff' : '#374151'}
+                x={x + CELL_W / 2}
+                y={y + CELL_H / 2 - 4}
+                textAnchor="middle"
+                fontSize={10}
+                fontWeight={isSelected ? '700' : '500'}
+                fill={isSelected ? '#fff' : '#374151'}
                 style={{ pointerEvents: 'none', userSelect: 'none' }}
               >
-                {zone.label}
+                {zone.label.split(' ')[0]}
               </text>
+              {zone.label.includes(' ') && (
+                <text
+                  x={x + CELL_W / 2}
+                  y={y + CELL_H / 2 + 8}
+                  textAnchor="middle"
+                  fontSize={10}
+                  fontWeight={isSelected ? '700' : '500'}
+                  fill={isSelected ? '#fff' : '#374151'}
+                  style={{ pointerEvents: 'none', userSelect: 'none' }}
+                >
+                  {zone.label.split(' ')[1]}
+                </text>
+              )}
             </g>
-          ))}
+          );
+        })}
 
-          {/* Impact dot marker */}
-          {(() => {
-            const z = ZONES.find(z => z.id === value);
-            if (!z) return null;
-            return (
-              <circle
-                cx={z.x + z.w / 2} cy={z.y + z.h / 2}
-                r="6" fill="#fff" stroke={ZONE_COLORS[value]} strokeWidth="2.5"
-              />
-            );
-          })()}
-        </svg>
-      </div>
+        {/* CoG cross in sweetspot */}
+        {(() => {
+          const cx = cellX(1) + CELL_W / 2;
+          const cy = cellY(1) + CELL_H / 2;
+          const s = 6;
+          return (
+            <g style={{ pointerEvents: 'none' }}>
+              <line x1={cx - s} y1={cy} x2={cx + s} y2={cy} stroke="#1D9E75" strokeWidth={1.5} opacity={0.5} />
+              <line x1={cx} y1={cy - s} x2={cx} y2={cy + s} stroke="#1D9E75" strokeWidth={1.5} opacity={0.5} />
+            </g>
+          );
+        })()}
 
-      {/* Legend */}
-      <div className="flex flex-col gap-2">
+        {/* Selected indicator dot */}
+        {selected && (
+          <circle
+            cx={cellX(selected.col) + CELL_W / 2}
+            cy={cellY(selected.row) + CELL_H - 10}
+            r={3.5}
+            fill="#fff"
+            stroke={selected.color}
+            strokeWidth={2}
+            style={{ pointerEvents: 'none' }}
+          />
+        )}
+      </svg>
+
+      {/* Compact legend grid */}
+      <div className="mt-3 grid grid-cols-3 gap-1.5">
         {ZONES.map(zone => (
           <button
             key={zone.id}
             type="button"
             onClick={() => onZoneSelect(zone.id)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all border ${
+            className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-all border ${
               value === zone.id
-                ? 'border-current text-white'
-                : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+                ? 'text-white border-transparent'
+                : 'border-gray-200 text-gray-600 bg-white hover:border-gray-300'
             }`}
-            style={value === zone.id ? { backgroundColor: ZONE_COLORS[zone.id], borderColor: ZONE_COLORS[zone.id] } : {}}
+            style={value === zone.id ? { backgroundColor: zone.color, borderColor: zone.color } : {}}
           >
             <span
-              className="w-3 h-3 rounded-full flex-shrink-0"
-              style={{ backgroundColor: ZONE_COLORS[zone.id] }}
+              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+              style={{ backgroundColor: zone.color }}
             />
-            {zone.label}
+            <span className="truncate">{zone.label}</span>
           </button>
         ))}
       </div>

@@ -1,16 +1,48 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #185FA5;
-  --color-success: #1D9E75;
-  --color-warning: #BA7517;
-  --color-danger: #E24B4A;
-  --color-bg: #F8F8F6;
+  /* Brand colors — accessible as Tailwind utilities */
+  --color-brand-primary:       #1E4D2B;
+  --color-brand-primary-light: #2A6B3C;
+  --color-brand-primary-dark:  #143320;
+  --color-brand-accent:        #C9A84C;
+  --color-brand-accent-light:  #E8C97A;
+  --color-brand-accent-dark:   #A8882A;
+  --color-brand-light-green:   #EEF4F0;
+  --color-brand-dark-green:    #143320;
+
+  /* Status (updated to brand palette) */
+  --color-success: #1E4D2B;
+  --color-warning: #C9A84C;
+  --color-danger:  #C0392B;
+
+  /* Legacy primary kept for existing components */
+  --color-primary: #1E4D2B;
+
+  --color-bg: #F5F7F5;
   --font-family-sans: Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
+:root {
+  --brand-primary:        #1E4D2B;
+  --brand-primary-light:  #2A6B3C;
+  --brand-primary-dark:   #143320;
+  --brand-accent:         #C9A84C;
+  --brand-accent-light:   #E8C97A;
+  --brand-accent-dark:    #A8882A;
+  --bg-primary:           #FFFFFF;
+  --bg-secondary:         #F5F7F5;
+  --text-primary:         #1A2A1E;
+  --text-secondary:       #4A6654;
+  --text-tertiary:        #8A9E8E;
+  --color-success:        #1E4D2B;
+  --color-warning:        #C9A84C;
+  --color-error:          #C0392B;
+  --border-color:         #C5D5C9;
+}
+
 body {
-  background-color: #F8F8F6;
+  background-color: #F5F7F5;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   margin: 0;
   -webkit-font-smoothing: antialiased;
@@ -19,3 +51,38 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* ── Button utilities ─────────────────────────────────────────────────────── */
+
+.btn-primary {
+  background-color: #1E4D2B;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.btn-primary:hover { background-color: #2A6B3C; }
+
+.btn-secondary {
+  background-color: transparent;
+  color: #1E4D2B;
+  border: 1.5px solid #C9A84C;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-secondary:hover {
+  background-color: #C9A84C;
+  color: #FFFFFF;
+}
+
+.card-accent { border-top: 3px solid #C9A84C; }
+
+.status-ok   { color: #1E4D2B; }
+.status-warn { color: #C9A84C; }
+.status-bad  { color: #C0392B; }

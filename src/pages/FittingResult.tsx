@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Download, CheckCircle, AlertCircle, XCircle, ChevronRight } from 'lucide-react';
 import { recommendShaft, getFlexLabel } from '../lib/shaftRecommendation';
 import { buildFlightShapeLabel } from '../lib/dPlaneEngine';
+import { getShaftLengthRecommendation } from '../lib/analysisEngine';
 import MetricCard from '../components/MetricCard';
 import RecommendationCard from '../components/RecommendationCard';
 import TechniqueCard from '../components/TechniqueCard';
@@ -334,6 +335,35 @@ export default function FittingResult() {
               </div>
             </div>
           </div>
+
+          {/* Block 3a.5: Schaftlängen-Empfehlung */}
+          {(() => {
+            const lengthRec = getShaftLengthRecommendation(
+              inputs.impactZone,
+              result.smashFactor,
+              inputs.clubSpeedMph
+            );
+            if (lengthRec.priority === 'info' && lengthRec.recommendedAdjustment === 0) return null;
+            return (
+              <div
+                className="rounded-xl border p-4 mb-4"
+                style={{
+                  borderColor: lengthRec.priority === 'strong' ? '#1E4D2B' : '#C9A84C',
+                  backgroundColor: lengthRec.priority === 'strong' ? '#EEF4F0' : '#FDF8EC',
+                }}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-semibold text-gray-800">📏 Schaftlängen-Empfehlung</span>
+                  {lengthRec.recommendedAdjustment !== 0 && (
+                    <span className="text-xs text-white px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#1E4D2B' }}>
+                      {lengthRec.recommendedAdjustment > 0 ? '+' : ''}{lengthRec.recommendedAdjustment}" vs. Standard
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-[#4A6654] leading-relaxed">{lengthRec.reason}</p>
+              </div>
+            );
+          })()}
 
           {/* Block 3b: Schaftempfehlung kompakt */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">

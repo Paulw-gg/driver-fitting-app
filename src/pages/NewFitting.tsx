@@ -1,6 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Zap } from 'lucide-react';
+import {
+  DndContext, closestCenter, KeyboardSensor, PointerSensor,
+  useSensor, useSensors,
+} from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
+import {
+  arrayMove, SortableContext, sortableKeyboardCoordinates,
+  verticalListSortingStrategy, useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import FaceZonePicker from '../components/FaceZonePicker';
 import SpinAxisSlider from '../components/SpinAxisSlider';
 import { runAnalysis } from '../lib/analysisEngine';
@@ -9,12 +19,50 @@ import type {
   CustomerGoal, SwingTempo, PlayerProfile,
 } from '../types';
 
-const GOAL_OPTIONS: { id: CustomerGoal; label: string }[] = [
-  { id: 'distance',    label: 'Mehr Länge' },
-  { id: 'direction',   label: 'Richtungskontrolle' },
-  { id: 'shotshaping', label: 'Shot-Shaping' },
-  { id: 'trajectory',  label: 'Flughöhe' },
-];
+const GOAL_CONFIG: Record<CustomerGoal, { label: string; icon: string; desc: string }> = {
+  distance:    { label: 'Mehr Länge',         icon: '📏', desc: 'Maximale Distanz' },
+  direction:   { label: 'Richtungskontrolle', icon: '🎯', desc: 'Mehr Fairways treffen' },
+  shotshaping: { label: 'Shot-Shaping',       icon: '🔄', desc: 'Draw/Fade spielen' },
+  trajectory:  { label: 'Flughöhe',           icon: '📈', desc: 'Höher oder flacher' },
+};
+
+const DEFAULT_GOALS: CustomerGoal[] = ['distance', 'direction', 'shotshaping', 'trajectory'];
+
+function SortableGoalItem({ goal, rank }: { goal: CustomerGoal; rank: number }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: goal });
+  const cfg = GOAL_CONFIG[goal];
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        cursor: isDragging ? 'grabbing' : 'grab',
+      }}
+      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border mb-1.5 select-none ${
+        rank === 0
+          ? 'bg-[#EEF4F0] border-[#1E4D2B]'
+          : 'bg-white border-[#C5D5C9]'
+      }`}
+      {...attributes}
+      {...listeners}
+    >
+      <div
+        className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+        style={{ backgroundColor: rank === 0 ? '#1E4D2B' : rank === 1 ? '#C9A84C' : '#8A9E8E' }}
+      >
+        {rank + 1}
+      </div>
+      <span className="text-base leading-none">{cfg.icon}</span>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium text-gray-800">{cfg.label}</div>
+        <div className="text-xs text-gray-400">{cfg.desc}</div>
+      </div>
+      <span className="text-gray-300 text-sm">⠿</span>
+    </div>
+  );
+}
 
 const WEIGHT_OPTIONS: { value: WeightSetting; label: string }[] = [
   { value: 'draw',    label: 'Draw / Heel' },
@@ -49,7 +97,7 @@ const defaultInputs: FittingInputs = {
   spinAxisDeg: 0,
   monitorType: 'radar',
   impactZone: 'sweetspot',
-  customerGoals: [],
+  customerGoals: DEFAULT_GOALS,
   tempo: 'medium',
   clubPathDeg: null,
   faceAngleDeg: null,
@@ -94,6 +142,11 @@ export default function NewFitting() {
   const [inputs, setInputs] = useState<FittingInputs>(defaultInputs);
   const [liveSF, setLiveSF] = useState<number>(0);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
   useEffect(() => {
     if (inputs.clubSpeedMph > 0) {
       setLiveSF(Math.round((inputs.ballSpeedMph / inputs.clubSpeedMph) * 1000) / 1000);
@@ -104,12 +157,16 @@ export default function NewFitting() {
     setInputs(prev => ({ ...prev, [key]: value }));
   }
 
-  function toggleGoal(goal: CustomerGoal) {
+  function handleGoalDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
     setInputs(prev => ({
       ...prev,
-      customerGoals: prev.customerGoals.includes(goal)
-        ? prev.customerGoals.filter(g => g !== goal)
-        : [...prev.customerGoals, goal]
+      customerGoals: arrayMove(
+        prev.customerGoals,
+        prev.customerGoals.indexOf(active.id as CustomerGoal),
+        prev.customerGoals.indexOf(over.id as CustomerGoal)
+      ),
     }));
   }
 
@@ -321,21 +378,18 @@ export default function NewFitting() {
           </Section>
 
           <Section title="4 · Kundenziele">
-            <div className="flex flex-wrap gap-3">
-              {GOAL_OPTIONS.map(g => (
-                <button
-                  key={g.id} type="button"
-                  onClick={() => toggleGoal(g.id)}
-                  className={`px-4 py-2 rounded-full border text-sm font-medium transition-all ${
-                    inputs.customerGoals.includes(g.id)
-                      ? 'bg-[#185FA5] text-white border-[#185FA5]'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
-                  }`}
-                >
-                  {g.label}
-                </button>
-              ))}
-            </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleGoalDragEnd}
+            >
+              <SortableContext items={inputs.customerGoals} strategy={verticalListSortingStrategy}>
+                {inputs.customerGoals.map((goal, index) => (
+                  <SortableGoalItem key={goal} goal={goal} rank={index} />
+                ))}
+              </SortableContext>
+            </DndContext>
+            <p className="text-xs text-gray-400 mt-1">Ziel 1 hat höchste Priorität. Per Drag & Drop umsortieren.</p>
           </Section>
 
           {/* Section 5: Spielerprofil */}
